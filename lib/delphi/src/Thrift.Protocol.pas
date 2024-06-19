@@ -18,6 +18,7 @@
  *)
 
 {$SCOPEDENUMS ON}
+{$IFOPT M+} {$DEFINE TYPEINFO_WAS_ON} {$ELSE} {$UNDEF TYPEINFO_WAS_ON} {$ENDIF}
 
 unit Thrift.Protocol;
 
@@ -27,6 +28,7 @@ uses
   Classes,
   SysUtils,
   Contnrs,
+  Math,
   Thrift.Exception,
   Thrift.Stream,
   Thrift.Utils,
@@ -196,6 +198,17 @@ type
 
   IThriftBytes = interface; // forward
 
+  {$TYPEINFO ON}
+  TThriftBytes = packed record  // can't use SysUtils.TBytes because it has no typinfo -> E2134
+    data : System.TArray<System.Byte>;
+
+    class operator Implicit(aRec : SysUtils.TBytes) : TThriftBytes;
+    class operator Implicit(aRec : TThriftBytes) : SysUtils.TBytes;
+    function Length : Integer;
+  end;
+  {$IFNDEF TYPEINFO_WAS_ON} {$TYPEINFO OFF} {$ENDIF}
+
+
   IProtocol = interface
     ['{6067A28E-15BF-4C9D-9A6F-D991BB3DCB85}']
     function GetTransport: ITransport;
@@ -219,7 +232,7 @@ type
     procedure WriteI64( const i64: Int64);
     procedure WriteDouble( const d: Double);
     procedure WriteString( const s: string );
-    procedure WriteAnsiString( const s: AnsiString);
+    procedure WriteAnsiString( const s: AnsiString);  deprecated 'AnsiString routines are deprecated, see THRIFT-5750';
     procedure WriteBinary( const b: TBytes); overload;
     procedure WriteBinary( const b: IThriftBytes); overload;
     procedure WriteUuid( const uuid: TGuid);
@@ -246,7 +259,7 @@ type
     function ReadBinaryCOM : IThriftBytes;
     function ReadUuid: TGuid;
     function ReadString: string;
-    function ReadAnsiString: AnsiString;
+    function ReadAnsiString: AnsiString;  deprecated 'AnsiString routines are deprecated, see THRIFT-5750';
 
     function  NextRecursionLevel : IProtocolRecursionTracker;
     procedure IncrementRecursionDepth;
@@ -298,7 +311,6 @@ type
     procedure WriteI64( const i64: Int64); virtual; abstract;
     procedure WriteDouble( const d: Double); virtual; abstract;
     procedure WriteString( const s: string ); virtual;
-    procedure WriteAnsiString( const s: AnsiString); virtual;
     procedure WriteBinary( const b: TBytes); overload; virtual; abstract;
     procedure WriteUuid( const b: TGuid); virtual; abstract;
 
@@ -323,7 +335,6 @@ type
     function ReadBinary: TBytes; virtual; abstract;
     function ReadUuid: TGuid; virtual; abstract;
     function ReadString: string; virtual;
-    function ReadAnsiString: AnsiString; virtual;
 
     // provide generic implementation for all derived classes
     procedure WriteBinary( const bytes : IThriftBytes); overload; virtual;
@@ -331,15 +342,31 @@ type
 
     property  Transport: ITransport read GetTransport;
 
+  private
+    // THRIFT-5750 unit visible, but no longer protected - awaiting final removal
+    // - Note that you can implement whavetever you want in your derived class, but no longer inherit
+    // - The function can still be called via IProtocol until final removal
+    function ReadAnsiString: AnsiString; virtual;  //deprecated;
+    procedure WriteAnsiString( const s: AnsiString); virtual; //deprecated;
+
   public
     constructor Create( const aTransport : ITransport); virtual;
   end;
 
+  {.$TYPEINFO ON}  // big NO -> may cause E2134 due to Delphis stupidity on enums vs TypeInfo
+  {$RTTI EXPLICIT METHODS([vcPublic, vcPublished]) PROPERTIES([vcPublic, vcPublished])}
   IBase = interface( ISupportsToString)
     ['{AFF6CECA-5200-4540-950E-9B89E0C1C00C}']
     procedure Read( const prot: IProtocol);
     procedure Write( const prot: IProtocol);
   end;
+
+  {$TYPEINFO ON}
+  {$RTTI EXPLICIT METHODS([vcPublic, vcPublished]) PROPERTIES([vcPublic, vcPublished])}
+  IBaseWithTypeInfo = interface( IBase) end;
+
+  {$RTTI EXPLICIT METHODS([]) PROPERTIES([]) FIELDS([])}
+  {$IFNDEF TYPEINFO_WAS_ON} {$TYPEINFO OFF} {$ENDIF}
 
 
   IThriftBytes = interface( ISupportsToString)
@@ -367,6 +394,7 @@ type
     constructor Create; overload;
     constructor Create( const bytes : TBytes); overload;
     constructor Create( var bytes : TBytes; const aTakeOwnership : Boolean = FALSE); overload;
+    constructor Create( const pData : Pointer; const nCount : Integer); overload;
 
     function ToString : string; override;
   end;
@@ -420,6 +448,7 @@ type
     procedure WriteI64( const i64: Int64); override;
     procedure WriteDouble( const d: Double); override;
     procedure WriteBinary( const b: TBytes); override;
+    procedure WriteBinary( const bytes : IThriftBytes); overload; override;
     procedure WriteUuid( const uuid: TGuid); override;
 
     function ReadMessageBegin: TThriftMessage; override;
@@ -484,8 +513,8 @@ type
     procedure WriteI64( const i64: Int64); override;
     procedure WriteDouble( const d: Double); override;
     procedure WriteString( const s: string ); override;
-    procedure WriteAnsiString( const s: AnsiString); override;
     procedure WriteBinary( const b: TBytes); override;
+    procedure WriteBinary( const bytes : IThriftBytes); overload; override;
     procedure WriteUuid( const uuid: TGuid); override;
 
     function ReadMessageBegin: TThriftMessage; override;
@@ -509,7 +538,15 @@ type
     function ReadBinary: TBytes; override;
     function ReadUuid: TGuid; override;
     function ReadString: string; override;
-    function ReadAnsiString: AnsiString; override;
+
+  private
+    // THRIFT-5750 unit visible, but no longer protected - awaiting final removal
+    // - Note that you can implement whavetever you want in your derived class, but no longer inherit
+    // - The function can still be called via IProtocol until final removal
+    {$WARN SYMBOL_DEPRECATED OFF}
+    function ReadAnsiString: AnsiString; override;  deprecated;
+    procedure WriteAnsiString( const s: AnsiString); override;  deprecated;
+    {$WARN SYMBOL_DEPRECATED DEFAULT}
   end;
 
 
@@ -572,6 +609,30 @@ begin
   System.Move( d, Result, SizeOf(Result));
 end;
 
+
+//--- TThriftBytes ----------------------------------------------------------------------
+
+
+class operator TThriftBytes.Implicit(aRec : SysUtils.TBytes) : TThriftBytes;
+begin
+  ASSERT( @result.data = @result);         // must be first field
+  ASSERT( SizeOf(aRec) = SizeOf(result));  // must be the only field
+  result := TThriftBytes(aRec);
+end;
+
+
+class operator TThriftBytes.Implicit(aRec : TThriftBytes) : SysUtils.TBytes;
+begin
+  ASSERT( @aRec.data = @aRec);             // must be first field
+  ASSERT( SizeOf(aRec) = SizeOf(result));  // must be the only field
+  result := SysUtils.TBytes(aRec.data);
+end;
+
+
+function TThriftBytes.Length : Integer;
+begin
+  result := System.Length(data);
+end;
 
 
 { TProtocolRecursionTrackerImpl }
@@ -702,6 +763,8 @@ end;
 
 
 procedure TProtocolImpl.WriteBinary( const bytes : IThriftBytes);
+// This implementation works, but is rather inefficient due to the extra memory allocation
+// Consider overwriting this for your transport implementation
 var tmp : TBytes;
 begin
   SetLength( tmp, bytes.Count);
@@ -754,6 +817,13 @@ begin
   if aTakeOwnership
   then SwapPointer( FData, bytes)
   else FData := bytes; // copies the data
+end;
+
+
+constructor TThriftBytesImpl.Create( const pData : Pointer; const nCount : Integer);
+begin
+  SetLength(FData, Max(nCount,0));
+  if Length(FData) > 0 then Move( pData^, FData[0], Length(FData));
 end;
 
 
@@ -1058,6 +1128,14 @@ begin
   iLen := Length(b);
   WriteI32( iLen);
   if iLen > 0 then FTrans.Write(b, 0, iLen);
+end;
+
+procedure TBinaryProtocolImpl.WriteBinary( const bytes : IThriftBytes);
+var iLen : Integer;
+begin
+  iLen := bytes.Count;
+  WriteI32( iLen);
+  if iLen > 0 then FTrans.Write( bytes.QueryRawDataPtr, 0, iLen);
 end;
 
 procedure TBinaryProtocolImpl.WriteUuid( const uuid: TGuid);
@@ -1454,13 +1532,21 @@ end;
 
 procedure TProtocolDecorator.WriteAnsiString( const s: AnsiString);
 begin
+  {$WARN SYMBOL_DEPRECATED OFF}
   FWrappedProtocol.WriteAnsiString( s);
+  {$WARN SYMBOL_DEPRECATED DEFAULT}
 end;
 
 
 procedure TProtocolDecorator.WriteBinary( const b: TBytes);
 begin
   FWrappedProtocol.WriteBinary( b);
+end;
+
+
+procedure TProtocolDecorator.WriteBinary( const bytes : IThriftBytes);
+begin
+  FWrappedProtocol.WriteBinary( bytes);
 end;
 
 
@@ -1598,7 +1684,9 @@ end;
 
 function TProtocolDecorator.ReadAnsiString: AnsiString;
 begin
+  {$WARN SYMBOL_DEPRECATED OFF}
   result := FWrappedProtocol.ReadAnsiString;
+  {$WARN SYMBOL_DEPRECATED DEFAULT}
 end;
 
 

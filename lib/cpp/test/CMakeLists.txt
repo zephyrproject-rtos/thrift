@@ -82,6 +82,7 @@ set(UnitTest_SOURCES
     TServerSocketTest.cpp
     TServerTransportTest.cpp
     ThrifttReadCheckTests.cpp
+    TUuidTest.cpp
 )
 
 add_executable(UnitTests ${UnitTest_SOURCES})
@@ -94,6 +95,25 @@ if(MSVC)
     set_property( TARGET UnitTests APPEND_STRING PROPERTY COMPILE_FLAGS /wd4503 )
 endif()
 
+# Test the THRIFT_TUUID_SUPPORT_BOOST_UUID compiler directive globally set on the target
+add_executable(UnitTestsUuid
+    UnitTestMain.cpp
+    TUuidTestBoost.cpp
+)
+target_link_libraries(UnitTestsUuid testgencpp ${Boost_LIBRARIES})
+target_link_libraries(UnitTestsUuid thrift)
+target_compile_definitions(UnitTestsUuid PUBLIC THRIFT_TUUID_SUPPORT_BOOST_UUID)
+add_test(NAME UnitTestsUuid COMMAND UnitTestsUuid)
+
+# Test not setting the THRIFT_TUUID_SUPPORT_BOOST_UUID compiler directive as with the test above.
+# The test does set the directive before including the thrift header to test the behaviour
+add_executable(UnitTestsUuidNoDirective
+    UnitTestMain.cpp
+    TUuidTestBoostNoDirective.cpp
+)
+target_link_libraries(UnitTestsUuidNoDirective testgencpp ${Boost_LIBRARIES})
+target_link_libraries(UnitTestsUuidNoDirective thrift)
+add_test(NAME UnitTestsUuidNoDirective COMMAND UnitTestsUuidNoDirective)
 
 set( TInterruptTest_SOURCES
      TSocketInterruptTest.cpp
@@ -360,7 +380,7 @@ add_custom_command(OUTPUT gen-cpp/AnnotationTest_constants.cpp
 )
 
 add_custom_command(OUTPUT gen-cpp/DebugProtoTest_types.cpp gen-cpp/DebugProtoTest_types.h gen-cpp/EmptyService.cpp gen-cpp/EmptyService.h
-    COMMAND ${THRIFT_COMPILER} --gen cpp ${PROJECT_SOURCE_DIR}/test/v0.16/DebugProtoTest.thrift
+    COMMAND ${THRIFT_COMPILER} --gen cpp ${PROJECT_SOURCE_DIR}/test/DebugProtoTest.thrift
 )
 
 add_custom_command(OUTPUT gen-cpp/EnumTest_types.cpp gen-cpp/EnumTest_types.h
@@ -384,7 +404,7 @@ add_custom_command(OUTPUT gen-cpp/Service.cpp gen-cpp/StressTest_types.cpp
 )
 
 add_custom_command(OUTPUT gen-cpp/SecondService.cpp gen-cpp/ThriftTest_constants.cpp gen-cpp/ThriftTest.cpp gen-cpp/ThriftTest_types.cpp gen-cpp/ThriftTest_types.h
-    COMMAND ${THRIFT_COMPILER} --gen cpp ${PROJECT_SOURCE_DIR}/test/v0.16/ThriftTest.thrift
+    COMMAND ${THRIFT_COMPILER} --gen cpp ${PROJECT_SOURCE_DIR}/test/ThriftTest.thrift
 )
 
 add_custom_command(OUTPUT gen-cpp/OneWayService.cpp gen-cpp/OneWayTest_types.h gen-cpp/OneWayService.h

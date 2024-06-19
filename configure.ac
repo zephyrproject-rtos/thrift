@@ -20,7 +20,7 @@
 AC_PREREQ(2.65)
 AC_CONFIG_MACRO_DIR([./aclocal])
 
-AC_INIT([thrift], [0.18.0])
+AC_INIT([thrift], [0.21.0])
 
 AC_CONFIG_AUX_DIR([.])
 
@@ -214,7 +214,7 @@ if test "$with_kotlin" = "yes";  then
   AC_PATH_PROG([GRADLE], [gradle])
   AC_SUBST(CLASSPATH)
   AC_SUBST(GRADLE_OPTS)
-  if test "x$JAVA" != "x" && test "x$JAVAC" != "x" && "x$GRADLE" != "x" ; then
+  if test "x$JAVA" != "x" && test "x$JAVAC" != "x" && test "x$GRADLE" != "x" ; then
     have_kotlin="yes"
   fi
 fi
@@ -311,9 +311,9 @@ AX_THRIFT_LIB(perl, [Perl], yes)
 if test "$with_perl" = "yes"; then
   AC_PATH_PROG([PERL], [perl])
   if test -n "$PERL" ; then
-    AC_PROG_PERL_MODULES([Bit::Vector], success="yes", success="no")
+    AX_PROG_PERL_MODULES([Bit::Vector],[success="yes"],[success="no"])
     have_perl_bit_vector="$success"
-    AC_PROG_PERL_MODULES([Class::Accessor], success="yes", success="no")
+    AX_PROG_PERL_MODULES([Class::Accessor],[success="yes"],[success="no"])
     have_perl_class_accessor="$success"
   fi
   if test -n "$PERL" -a "$have_perl_bit_vector" = "yes" ; then
@@ -469,7 +469,7 @@ AX_THRIFT_LIB(netstd, [.NET Core], yes)
 if test "$with_netstd" = "yes";  then
   AC_PATH_PROG([DOTNETCORE], [dotnet])
   if [[ -x "$DOTNETCORE" ]] ; then
-    AX_PROG_DOTNETCORE_VERSION( [3.1.0], have_netstd="yes", have_netstd="no")
+    AX_PROG_DOTNETCORE_VERSION( [7.0.0], have_netstd="yes", have_netstd="no")
   fi
 fi
 AM_CONDITIONAL(WITH_DOTNET, [test "$have_netstd" = "yes"])
@@ -589,13 +589,14 @@ case "${host_os}" in
   AM_CONDITIONAL(MINGW, true)
   ;;
 *)
-  AC_ISC_POSIX
+  AC_SEARCH_LIBS([strerror],[cposix])
   ;;
 esac
 
 AC_C_CONST
 AC_C_INLINE
 AC_C_VOLATILE
+AC_C_RESTRICT
 
 AC_HEADER_STDBOOL
 AC_HEADER_STDC

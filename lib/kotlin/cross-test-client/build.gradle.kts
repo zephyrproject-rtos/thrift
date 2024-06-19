@@ -52,7 +52,7 @@ dependencies {
 
 kotlin {
     jvmToolchain {
-        (this as JavaToolchainSpec).languageVersion.set(JavaLanguageVersion.of(11))
+        (this as JavaToolchainSpec).languageVersion.set(JavaLanguageVersion.of(8))
     }
 }
 
@@ -70,7 +70,7 @@ tasks {
 
     task<Exec>("compileThrift") {
         val thriftBin = if (hasProperty("thrift.compiler")) {
-            file(property("thrift.compiler"))
+            file(property("thrift.compiler")!!)
         } else {
             project.rootDir.resolve("../../compiler/cpp/thrift")
         }
