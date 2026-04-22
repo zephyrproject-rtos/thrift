@@ -1,5 +1,7 @@
-name: thrift
 build:
-  cmake-ext: True
-  kconfig-ext: True
-
+  kconfig: zephyr/Kconfig
+  cmake: zephyr/
+samples:
+  - zephyr/samples
+tests:
+  - zephyr/tests
